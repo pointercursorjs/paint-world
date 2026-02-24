@@ -394,7 +394,9 @@ function handleMsg(msg) {
     redraw();
   }
   if (msg.type === 'cursor') {
-    updateCursor(msg.id, msg.id, msg.color, msg.x, msg.y);
+    const lsx = msg.wx * PIXEL_SIZE * scale + offsetX;
+    const lsy = msg.wy * PIXEL_SIZE * scale + offsetY;
+    updateCursor(msg.id, msg.id, msg.color, lsx, lsy, msg.wx, msg.wy);
   }
 }
 
@@ -410,6 +412,7 @@ workspace.addEventListener('wheel', e => {
   scale = newScale;
   redraw();
   drawGrid();
+  refreshRemoteCursors();
 }, { passive: false });
 
 // ── PAN Y DIBUJO ──
@@ -461,7 +464,7 @@ workspace.addEventListener('mousemove', e => {
   if (isPanning) {
     offsetX = panOriginX + (e.clientX - panStartX);
     offsetY = panOriginY + (e.clientY - panStartY);
-    redraw(); drawGrid(); return;
+    redraw(); drawGrid(); refreshRemoteCursors(); return;
   }
 
   // hover pixel highlight
@@ -482,7 +485,8 @@ workspace.addEventListener('mousemove', e => {
   const now = Date.now();
   if (wsReady && now - lastCursorSend > 32) {
     lastCursorSend = now;
-    ws.send(JSON.stringify({ type: 'cursor', id: myId, color: myColor, x: sx, y: sy }));
+    const { x: wx, y: wy } = screenToWorld(sx, sy);
+    ws.send(JSON.stringify({ type: 'cursor', id: myId, color: myColor, wx, wy }));
   }
 
   if (isMouseDown) doPixel(e);
@@ -504,7 +508,7 @@ workspace.addEventListener('contextmenu', e => e.preventDefault());
 const cursorsEl = document.getElementById('cursors');
 const remoteCursors = {};
 
-function updateCursor(id, label, col, sx, sy) {
+function updateCursor(id, label, col, sx, sy, wx, wy) {
   if (!remoteCursors[id]) {
     const el  = document.createElement('div');
     el.className = 'cursor-label';
@@ -512,14 +516,27 @@ function updateCursor(id, label, col, sx, sy) {
     const dot = document.createElement('div'); dot.className = 'cursor-dot';
     el.appendChild(tag); el.appendChild(dot);
     cursorsEl.appendChild(el);
-    remoteCursors[id] = { el, tag, dot };
+    remoteCursors[id] = { el, tag, dot, wx: 0, wy: 0 };
   }
-  const { el, tag, dot } = remoteCursors[id];
-  tag.textContent = label;
-  tag.style.background = col;
-  dot.style.background = col;
-  el.style.left = sx + 'px';
-  el.style.top  = sy + 'px';
+  const c = remoteCursors[id];
+  c.tag.textContent = label;
+  c.tag.style.background = col;
+  c.dot.style.background = col;
+  if (wx !== undefined) { c.wx = wx; c.wy = wy; }
+  c.el.style.left = sx + 'px';
+  c.el.style.top  = sy + 'px';
+}
+
+// recalcular posicion de todos los cursores remotos (pa cuando haces pan/zoom)
+function refreshRemoteCursors() {
+  for (const id in remoteCursors) {
+    if (id === '__me__') continue;
+    const c = remoteCursors[id];
+    const lsx = c.wx * PIXEL_SIZE * scale + offsetX;
+    const lsy = c.wy * PIXEL_SIZE * scale + offsetY;
+    c.el.style.left = lsx + 'px';
+    c.el.style.top  = lsy + 'px';
+  }
 }
 
 function removeCursor(id) {
