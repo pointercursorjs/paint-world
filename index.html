@@ -478,8 +478,7 @@ workspace.addEventListener('mousemove', e => {
   hoverEl.style.width  = Math.ceil(ps) + 'px';
   hoverEl.style.height = Math.ceil(ps) + 'px';
 
-  // cursor label propio
-  updateCursor('__me__', myId, myColor, sx, sy);
+  // no mostramos nuestro propio cursor label, solo los de los demás
 
   // mandar cursor a los demás
   const now = Date.now();
@@ -499,7 +498,6 @@ window.addEventListener('mouseup', () => {
 
 workspace.addEventListener('mouseleave', () => {
   hoverEl.style.width = '0'; hoverEl.style.height = '0';
-  removeCursor('__me__');
 });
 
 workspace.addEventListener('contextmenu', e => e.preventDefault());
