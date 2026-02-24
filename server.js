@@ -41,7 +41,7 @@ async function main() {
 
   // servidor HTTP que sirve el HTML
   const server = http.createServer((req, res) => {
-    const file = path.join(__dirname, 'paint-world.html');
+    const file = path.join(__dirname, 'index.html');
     fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); res.end('not found'); return; }
       res.writeHead(200, { 'Content-Type': 'text/html' });
