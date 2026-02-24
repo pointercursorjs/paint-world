@@ -22,7 +22,6 @@ async function loadCanvas() {
   return res.rows[0].data;
 }
 
-// solo guarda usuarios que ya no estan conectados (el canvas permanente)
 async function saveCanvas(strokes) {
   await pool.query(
     "INSERT INTO canvas (key, data) VALUES ('main', $1) ON CONFLICT (key) DO UPDATE SET data = $1",
@@ -30,16 +29,24 @@ async function saveCanvas(strokes) {
   );
 }
 
+async function clearCanvas() {
+  await pool.query("DELETE FROM canvas WHERE key = 'main'");
+}
+
 async function main() {
   await initDB();
+  const allStrokes = await loadCanvas();
+  console.log('canvas cargado, trazos:', Object.keys(allStrokes).length);
 
-  // canvas permanente = trazos de sesiones anteriores que el usuario decidio no borrar
-  // ahorita lo dejamos vacio porque cada sesion es temporal
-  const permanentStrokes = {};
-  // strokes activos en memoria (se pierden si el server se reinicia, eso es lo correcto)
-  const allStrokes = {};
-
-  console.log('DB lista');
+  // guardar canvas con debounce pa no tronar la DB
+  let saveTimer = null;
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveCanvas(allStrokes).catch(console.error);
+      saveTimer = null;
+    }, 3000);
+  }
 
   const server = http.createServer((req, res) => {
     const file = path.join(__dirname, 'index.html');
@@ -81,18 +88,19 @@ async function main() {
 
       if (msg.type === 'hello') {
         ws._id = msg.id;
-        // solo mandamos los trazos activos en memoria, no los de DB
         ws.send(JSON.stringify({ type: 'init', strokes: allStrokes }));
       }
 
       if (msg.type === 'draw') {
         if (!allStrokes[msg.id]) allStrokes[msg.id] = [];
         allStrokes[msg.id].push({ x0: msg.x0, y0: msg.y0, x1: msg.x1, y1: msg.y1, color: msg.color, size: msg.size, erase: msg.erase });
+        scheduleSave();
         enqueueDraw(msg);
       }
 
       if (msg.type === 'clear') {
         delete allStrokes[msg.id];
+        scheduleSave();
         broadcast(ws, { type: 'clear', id: msg.id });
       }
 
@@ -102,10 +110,23 @@ async function main() {
     });
 
     ws.on('close', () => {
-      console.log('desconectado | total: ' + wss.clients.size);
+      const remaining = wss.clients.size;
+      console.log('desconectado | total: ' + remaining);
+
       if (ws._id) {
         delete allStrokes[ws._id];
         broadcast(ws, { type: 'clear', id: ws._id });
+      }
+
+      // si no queda nadie, borrar todo el canvas
+      if (remaining === 0) {
+        console.log('sala vacia, borrando canvas...');
+        for (const key in allStrokes) delete allStrokes[key];
+        clearCanvas().catch(console.error);
+        // avisar a todos (no hay nadie pero por si acaso)
+        const msg = JSON.stringify({ type: 'clear_all' });
+        for (const c of wss.clients)
+          if (c.readyState === 1) c.send(msg);
       }
     });
   });
