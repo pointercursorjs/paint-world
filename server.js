@@ -9,37 +9,38 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejec
 
 async function initDB() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS strokes (
-      id TEXT PRIMARY KEY,
-      data JSONB NOT NULL DEFAULT '[]'
+    CREATE TABLE IF NOT EXISTS canvas (
+      key TEXT PRIMARY KEY,
+      data JSONB NOT NULL
     )
   `);
 }
 
-async function loadStrokes() {
-  const res = await pool.query('SELECT id, data FROM strokes');
-  const strokes = {};
-  for (const row of res.rows) strokes[row.id] = row.data;
-  return strokes;
+async function loadCanvas() {
+  const res = await pool.query("SELECT data FROM canvas WHERE key = 'main'");
+  if (res.rows.length === 0) return {};
+  return res.rows[0].data;
 }
 
-async function saveUserStrokes(id, segs) {
+// solo guarda usuarios que ya no estan conectados (el canvas permanente)
+async function saveCanvas(strokes) {
   await pool.query(
-    'INSERT INTO strokes (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = $2',
-    [id, JSON.stringify(segs)]
+    "INSERT INTO canvas (key, data) VALUES ('main', $1) ON CONFLICT (key) DO UPDATE SET data = $1",
+    [JSON.stringify(strokes)]
   );
-}
-
-async function deleteUserStrokes(id) {
-  await pool.query('DELETE FROM strokes WHERE id = $1', [id]);
 }
 
 async function main() {
   await initDB();
-  const allStrokes = await loadStrokes();
-  console.log('DB lista, strokes cargados:', Object.keys(allStrokes).length);
 
-  // servidor HTTP que sirve el HTML
+  // canvas permanente = trazos de sesiones anteriores que el usuario decidio no borrar
+  // ahorita lo dejamos vacio porque cada sesion es temporal
+  const permanentStrokes = {};
+  // strokes activos en memoria (se pierden si el server se reinicia, eso es lo correcto)
+  const allStrokes = {};
+
+  console.log('DB lista');
+
   const server = http.createServer((req, res) => {
     const file = path.join(__dirname, 'index.html');
     fs.readFile(file, (err, data) => {
@@ -49,7 +50,6 @@ async function main() {
     });
   });
 
-  // WebSocket encima del mismo servidor HTTP
   const wss = new WebSocketServer({ server });
 
   const queue = [];
@@ -81,19 +81,18 @@ async function main() {
 
       if (msg.type === 'hello') {
         ws._id = msg.id;
+        // solo mandamos los trazos activos en memoria, no los de DB
         ws.send(JSON.stringify({ type: 'init', strokes: allStrokes }));
       }
 
       if (msg.type === 'draw') {
         if (!allStrokes[msg.id]) allStrokes[msg.id] = [];
         allStrokes[msg.id].push({ x0: msg.x0, y0: msg.y0, x1: msg.x1, y1: msg.y1, color: msg.color, size: msg.size, erase: msg.erase });
-        saveUserStrokes(msg.id, allStrokes[msg.id]).catch(console.error);
         enqueueDraw(msg);
       }
 
       if (msg.type === 'clear') {
         delete allStrokes[msg.id];
-        deleteUserStrokes(msg.id).catch(console.error);
         broadcast(ws, { type: 'clear', id: msg.id });
       }
 
@@ -106,7 +105,6 @@ async function main() {
       console.log('desconectado | total: ' + wss.clients.size);
       if (ws._id) {
         delete allStrokes[ws._id];
-        deleteUserStrokes(ws._id).catch(console.error);
         broadcast(ws, { type: 'clear', id: ws._id });
       }
     });
