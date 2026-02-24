@@ -1,10 +1,12 @@
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { WebSocketServer } = require('ws');
 const { Pool } = require('pg');
 
 const PORT = process.env.PORT || 3001;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-// crear tabla si no existe
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS strokes (
@@ -37,9 +39,19 @@ async function main() {
   const allStrokes = await loadStrokes();
   console.log('DB lista, strokes cargados:', Object.keys(allStrokes).length);
 
-  const wss = new WebSocketServer({ port: PORT });
+  // servidor HTTP que sirve el HTML
+  const server = http.createServer((req, res) => {
+    const file = path.join(__dirname, 'paint-world.html');
+    fs.readFile(file, (err, data) => {
+      if (err) { res.writeHead(404); res.end('not found'); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
+  });
 
-  // batch draws cada 16ms
+  // WebSocket encima del mismo servidor HTTP
+  const wss = new WebSocketServer({ server });
+
   const queue = [];
   let batchTimer = null;
   function flushBatch() {
@@ -100,7 +112,9 @@ async function main() {
     });
   });
 
-  console.log('paint world corriendo en puerto ' + PORT);
+  server.listen(PORT, () => {
+    console.log('paint world corriendo en puerto ' + PORT);
+  });
 }
 
 main().catch(console.error);
