@@ -310,6 +310,11 @@ function handleMsg(msg) {
     removeCursor(msg.id);
     redrawAll();
   }
+  if (msg.type === 'clear_all') {
+    for (const id in allStrokes) delete allStrokes[id];
+    for (const id in remoteCursors) removeCursor(id);
+    redrawAll();
+  }
   if (msg.type === 'cursor') {
     updateCursor(msg.id, msg.id, msg.color, msg.x, msg.y);
   }
