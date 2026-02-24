@@ -258,6 +258,7 @@ let offsetX = 0, offsetY = 0, scale = 1;
 
 // el canvas es "infinito" — guardamos pixels como mapa {x,y -> color}
 const pixels = {}; // key: "x,y" -> color hex
+const myPixels = new Set(); // keys de pixels que YO pinte
 
 function pixelKey(x, y) { return x + ',' + y; }
 
@@ -434,6 +435,8 @@ function doPixel(e) {
   const { px, py } = getPixelFromEvent(e);
   const c = tool === 'eraser' ? null : color;
   paintPixel(px, py, c);
+  if (c === null) myPixels.delete(pixelKey(px, py));
+  else myPixels.add(pixelKey(px, py));
   if (wsReady) ws.send(JSON.stringify({ type: 'pixel', id: myId, px, py, color: c }));
 }
 
@@ -527,6 +530,10 @@ function removeCursor(id) {
 document.getElementById('btn-pen').addEventListener('click', () => setTool('pen'));
 document.getElementById('btn-eraser').addEventListener('click', () => setTool('eraser'));
 document.getElementById('btn-clear').addEventListener('click', () => {
+  // borrar solo MIS pixels localmente
+  for (const key of myPixels) delete pixels[key];
+  myPixels.clear();
+  redraw();
   if (wsReady) ws.send(JSON.stringify({ type: 'clear', id: myId }));
 });
 document.querySelectorAll('.color-swatch').forEach(el => {
