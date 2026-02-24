@@ -22,10 +22,10 @@ async function loadCanvas() {
   return res.rows[0].data;
 }
 
-async function saveCanvas(strokes) {
+async function saveCanvas(pixels) {
   await pool.query(
     "INSERT INTO canvas (key, data) VALUES ('main', $1) ON CONFLICT (key) DO UPDATE SET data = $1",
-    [JSON.stringify(strokes)]
+    [JSON.stringify(pixels)]
   );
 }
 
@@ -35,15 +35,17 @@ async function clearCanvas() {
 
 async function main() {
   await initDB();
-  const allStrokes = await loadCanvas();
-  console.log('canvas cargado, trazos:', Object.keys(allStrokes).length);
+  // pixels = { "x,y": "#color" }
+  const pixels = await loadCanvas();
+  // quién pintó qué pixel: { "x,y": userId }
+  const pixelOwners = {};
+  console.log('canvas cargado, pixels:', Object.keys(pixels).length);
 
-  // guardar canvas con debounce pa no tronar la DB
   let saveTimer = null;
   function scheduleSave() {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      saveCanvas(allStrokes).catch(console.error);
+      saveCanvas(pixels).catch(console.error);
       saveTimer = null;
     }, 3000);
   }
@@ -88,20 +90,32 @@ async function main() {
 
       if (msg.type === 'hello') {
         ws._id = msg.id;
-        ws.send(JSON.stringify({ type: 'init', strokes: allStrokes }));
+        ws.send(JSON.stringify({ type: 'init', pixels }));
       }
 
-      if (msg.type === 'draw') {
-        if (!allStrokes[msg.id]) allStrokes[msg.id] = [];
-        allStrokes[msg.id].push({ x0: msg.x0, y0: msg.y0, x1: msg.x1, y1: msg.y1, color: msg.color, size: msg.size, erase: msg.erase });
+      if (msg.type === 'pixel') {
+        const key = msg.px + ',' + msg.py;
+        if (msg.color === null) {
+          delete pixels[key];
+          delete pixelOwners[key];
+        } else {
+          pixels[key] = msg.color;
+          pixelOwners[key] = msg.id;
+        }
         scheduleSave();
-        enqueueDraw(msg);
+        enqueueDraw({ type: 'pixel', id: msg.id, px: msg.px, py: msg.py, color: msg.color });
       }
 
       if (msg.type === 'clear') {
-        delete allStrokes[msg.id];
+        // borrar todos los pixels de este usuario
+        for (const key in pixelOwners) {
+          if (pixelOwners[key] === msg.id) {
+            delete pixels[key];
+            delete pixelOwners[key];
+          }
+        }
         scheduleSave();
-        broadcast(ws, { type: 'clear', id: msg.id });
+        broadcast(ws, { type: 'clear_user', id: msg.id, pixels });
       }
 
       if (msg.type === 'cursor') {
@@ -114,19 +128,23 @@ async function main() {
       console.log('desconectado | total: ' + remaining);
 
       if (ws._id) {
-        delete allStrokes[ws._id];
-        broadcast(ws, { type: 'clear', id: ws._id });
+        // borrar pixels de este usuario
+        for (const key in pixelOwners) {
+          if (pixelOwners[key] === ws._id) {
+            delete pixels[key];
+            delete pixelOwners[key];
+          }
+        }
+        broadcast(ws, { type: 'clear_user', id: ws._id, pixels });
+        scheduleSave();
       }
 
-      // si no queda nadie, borrar todo el canvas
+      // si no queda nadie, limpiar todo
       if (remaining === 0) {
         console.log('sala vacia, borrando canvas...');
-        for (const key in allStrokes) delete allStrokes[key];
+        for (const key in pixels) delete pixels[key];
+        for (const key in pixelOwners) delete pixelOwners[key];
         clearCanvas().catch(console.error);
-        // avisar a todos (no hay nadie pero por si acaso)
-        const msg = JSON.stringify({ type: 'clear_all' });
-        for (const c of wss.clients)
-          if (c.readyState === 1) c.send(msg);
       }
     });
   });
