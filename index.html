@@ -147,6 +147,30 @@ header {
   cursor: pointer; transition: opacity .15s;
 }
 .modal-btn:hover { opacity: 0.85; }
+
+/* MODAL MOBILE */
+.mobile-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+}
+.mobile-overlay.show { display: flex; }
+.mobile-modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 36px 32px;
+  width: 300px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  text-align: center;
+}
+.mobile-modal i { font-size: 40px; color: var(--accent); }
+.mobile-modal h2 { font-size: 20px; font-weight: 900; color: var(--ink); }
+.mobile-modal h2 span { color: var(--accent); }
+.mobile-modal p { font-size: 13px; color: #888; }
 </style>
 </head>
 <body>
@@ -159,6 +183,15 @@ header {
     <div class="id-badge" id="id-badge"></div>
     <p style="font-size:12px;color:#bbb">cada vez que abres una pestaña nueva te toca uno diferente</p>
     <button class="modal-btn" id="modal-btn">empezar a dibujar</button>
+  </div>
+</div>
+
+<!-- MODAL MOBILE -->
+<div class="mobile-overlay" id="mobile-overlay">
+  <div class="mobile-modal">
+    <i class="fa-solid fa-mobile-screen"></i>
+    <h2>paint <span>world</span></h2>
+    <p>paint world no está disponible para celulares o tablets, entra desde una computadora</p>
   </div>
 </div>
 
