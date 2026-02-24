@@ -39,21 +39,33 @@ header {
   flex: 1;
   overflow: hidden;
   position: relative;
-  background: #f0ede8;
+  background: #e8e5e0;
+  cursor: crosshair;
 }
 #canvas {
-  display: block;
-  cursor: crosshair;
-  touch-action: none;
-  background: #fff;
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  top: 0; left: 0;
+  image-rendering: pixelated;
+}
+#grid-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  image-rendering: pixelated;
+  opacity: 0.15;
 }
 #cursors {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 100;
+}
+#hover-pixel {
+  position: absolute;
+  pointer-events: none;
+  z-index: 99;
+  border: 2px solid rgba(0,0,0,0.4);
+  background: transparent;
 }
 
 .toolbar {
@@ -88,7 +100,6 @@ header {
 }
 .color-swatch:hover { transform: scale(1.18); }
 .color-swatch.selected { border-color: var(--ink); }
-.size-slider { width: 80px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
 .color-picker-wrap { position: relative; width: 28px; height: 28px; flex-shrink: 0; }
 .color-picker-wrap input { opacity: 0; position: absolute; inset: 0; cursor: pointer; width: 100%; height: 100%; }
 .color-picker-icon {
@@ -96,21 +107,6 @@ header {
   border: 2px dashed #bbb;
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; color: #888; pointer-events: none;
-}
-
-/* CURSOR LABELS */
-.cursor-label {
-  position: absolute;
-  pointer-events: none;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  transform: translate(-50%, calc(-100% - 10px));
-}
-.cursor-label .name-tag {
-  color: #fff; font-size: 11px; font-weight: 700;
-  padding: 2px 8px; border-radius: 20px; white-space: nowrap;
-}
-.cursor-label .cursor-dot {
-  width: 8px; height: 8px; border-radius: 50%;
 }
 
 /* MODAL BIENVENIDA */
@@ -159,10 +155,8 @@ header {
 }
 .mobile-overlay.show { display: flex; }
 .mobile-modal {
-  background: #fff;
-  border-radius: 20px;
-  padding: 36px 32px;
-  width: 300px;
+  background: #fff; border-radius: 20px;
+  padding: 36px 32px; width: 300px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.15);
   display: flex; flex-direction: column; align-items: center; gap: 12px;
   text-align: center;
@@ -171,20 +165,22 @@ header {
 .mobile-modal h2 { font-size: 20px; font-weight: 900; color: var(--ink); }
 .mobile-modal h2 span { color: var(--accent); }
 .mobile-modal p { font-size: 13px; color: #888; }
+
+/* CURSOR LABELS */
+.cursor-label {
+  position: absolute;
+  pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  transform: translate(-50%, calc(-100% - 10px));
+}
+.cursor-label .name-tag {
+  color: #fff; font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+}
+.cursor-label .cursor-dot { width: 8px; height: 8px; border-radius: 50%; }
 </style>
 </head>
 <body>
-
-<!-- MODAL BIENVENIDA -->
-<div class="modal-overlay" id="modal">
-  <div class="modal">
-    <h2>paint <span>world</span></h2>
-    <p>este es tu id para esta sesión 👀</p>
-    <div class="id-badge" id="id-badge"></div>
-    <p style="font-size:12px;color:#bbb">cada vez que abres una pestaña nueva te toca uno diferente</p>
-    <button class="modal-btn" id="modal-btn">empezar a dibujar</button>
-  </div>
-</div>
 
 <!-- MODAL MOBILE -->
 <div class="mobile-overlay" id="mobile-overlay">
@@ -195,12 +191,25 @@ header {
   </div>
 </div>
 
+<!-- MODAL BIENVENIDA -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2>paint <span>world</span></h2>
+    <p>este es tu id para esta sesión</p>
+    <div class="id-badge" id="id-badge"></div>
+    <p style="font-size:12px;color:#bbb">cada vez que abres una pestaña nueva te toca uno diferente</p>
+    <button class="modal-btn" id="modal-btn">empezar a dibujar</button>
+  </div>
+</div>
+
 <header>
   <div class="logo">paint <span>world</span></div>
 </header>
 
 <div class="workspace" id="workspace">
   <canvas id="canvas"></canvas>
+  <canvas id="grid-canvas"></canvas>
+  <div id="hover-pixel"></div>
   <div id="cursors"></div>
 </div>
 
@@ -209,19 +218,18 @@ header {
   <button class="tool-btn" id="btn-eraser"><i class="fa-solid fa-eraser"></i></button>
   <button class="tool-btn" id="btn-clear"><i class="fa-solid fa-trash"></i></button>
   <div class="sep"></div>
-  <i class="fa-solid fa-circle" style="font-size:8px;color:#aaa;flex-shrink:0"></i>
-  <input type="range" min="1" max="40" value="5" class="size-slider" id="size-slider">
-  <i class="fa-solid fa-circle" style="font-size:16px;color:#aaa;flex-shrink:0"></i>
-  <div class="sep"></div>
   <div class="color-swatch selected" style="background:#1a1a1a" data-color="#1a1a1a"></div>
-  <div class="color-swatch" style="background:#ff4d4d" data-color="#ff4d4d"></div>
-  <div class="color-swatch" style="background:#3b82f6" data-color="#3b82f6"></div>
-  <div class="color-swatch" style="background:#22c55e" data-color="#22c55e"></div>
-  <div class="color-swatch" style="background:#f59e0b" data-color="#f59e0b"></div>
-  <div class="color-swatch" style="background:#a855f7" data-color="#a855f7"></div>
-  <div class="color-swatch" style="background:#f97316" data-color="#f97316"></div>
-  <div class="color-swatch" style="background:#ec4899" data-color="#ec4899"></div>
   <div class="color-swatch" style="background:#ffffff;outline:1.5px solid #ccc;outline-offset:1px" data-color="#ffffff"></div>
+  <div class="color-swatch" style="background:#ff4d4d" data-color="#ff4d4d"></div>
+  <div class="color-swatch" style="background:#f97316" data-color="#f97316"></div>
+  <div class="color-swatch" style="background:#f59e0b" data-color="#f59e0b"></div>
+  <div class="color-swatch" style="background:#22c55e" data-color="#22c55e"></div>
+  <div class="color-swatch" style="background:#3b82f6" data-color="#3b82f6"></div>
+  <div class="color-swatch" style="background:#a855f7" data-color="#a855f7"></div>
+  <div class="color-swatch" style="background:#ec4899" data-color="#ec4899"></div>
+  <div class="color-swatch" style="background:#e5e7eb" data-color="#e5e7eb"></div>
+  <div class="color-swatch" style="background:#6b7280" data-color="#6b7280"></div>
+  <div class="color-swatch" style="background:#92400e" data-color="#92400e"></div>
   <div class="sep"></div>
   <div class="color-picker-wrap">
     <div class="color-picker-icon"><i class="fa-solid fa-palette"></i></div>
@@ -231,53 +239,121 @@ header {
 
 <script>
 const WS_URL = location.hostname === 'localhost' ? 'ws://localhost:3001' : 'wss://' + location.hostname;
+const PIXEL_SIZE = 16; // tamaño de cada pixel en pantalla a escala 1
 
-// ── ID RANDOM POR PESTAÑA, LABEL RANDOM TAMBIÉN ──
+// ── ID RANDOM POR PESTAÑA ──
 const myId    = Math.random().toString(36).slice(2, 8).toUpperCase();
-const myColor = '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
+const myColor = '#' + Math.floor(Math.random() * 0xb0b0b0 + 0x404040).toString(16).padStart(6, '0');
 
 // ── CANVAS ──
 const canvas    = document.getElementById('canvas');
 const ctx       = canvas.getContext('2d');
+const gridCanvas = document.getElementById('grid-canvas');
+const gridCtx   = gridCanvas.getContext('2d');
 const workspace = document.getElementById('workspace');
+const hoverEl   = document.getElementById('hover-pixel');
 
+// ── VISTA ──
+let offsetX = 0, offsetY = 0, scale = 1;
+
+// el canvas es "infinito" — guardamos pixels como mapa {x,y -> color}
+const pixels = {}; // key: "x,y" -> color hex
+
+function pixelKey(x, y) { return x + ',' + y; }
+
+function worldToPixel(wx, wy) {
+  return { px: Math.floor(wx / PIXEL_SIZE), py: Math.floor(wy / PIXEL_SIZE) };
+}
+
+function screenToWorld(sx, sy) {
+  return { x: (sx - offsetX) / scale, y: (sy - offsetY) / scale };
+}
+
+function pixelToScreen(px, py) {
+  return {
+    sx: px * PIXEL_SIZE * scale + offsetX,
+    sy: py * PIXEL_SIZE * scale + offsetY
+  };
+}
+
+// tamaño del canvas = workspace
 function resizeCanvas() {
-  canvas.width  = workspace.offsetWidth;
-  canvas.height = workspace.offsetHeight;
-  redrawAll();
+  canvas.width = gridCanvas.width = workspace.offsetWidth;
+  canvas.height = gridCanvas.height = workspace.offsetHeight;
+  redraw();
+  drawGrid();
 }
 window.addEventListener('resize', resizeCanvas);
 
-// ── VISTA (pan/zoom) ──
-let offsetX = 0, offsetY = 0, scale = 1;
-function toWorld(sx, sy) { return { x: (sx - offsetX) / scale, y: (sy - offsetY) / scale }; }
-function toScreen(wx, wy) { return { x: wx * scale + offsetX, y: wy * scale + offsetY }; }
-
-// ── ESTADO ──
-let tool = 'pen', color = '#1a1a1a', size = 5;
-let isDrawing = false, lastX = 0, lastY = 0;
-const allStrokes = {};
-
-function drawSeg(x0, y0, x1, y1, c, s, erase) {
-  const a = toScreen(x0, y0), b = toScreen(x1, y1);
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
-  ctx.strokeStyle = erase ? '#ffffff' : c;
-  ctx.lineWidth   = s * scale;
-  ctx.lineCap     = 'round';
-  ctx.lineJoin    = 'round';
-  ctx.stroke();
-}
-function redrawAll() {
+function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (const id in allStrokes)
-    for (const s of allStrokes[id])
-      drawSeg(s.x0, s.y0, s.x1, s.y1, s.color, s.size, s.erase);
+  // calcular rango visible
+  const { x: x0, y: y0 } = screenToWorld(0, 0);
+  const { x: x1, y: y1 } = screenToWorld(canvas.width, canvas.height);
+  const px0 = Math.floor(x0 / PIXEL_SIZE) - 1;
+  const py0 = Math.floor(y0 / PIXEL_SIZE) - 1;
+  const px1 = Math.ceil(x1 / PIXEL_SIZE) + 1;
+  const py1 = Math.ceil(y1 / PIXEL_SIZE) + 1;
+
+  const ps = PIXEL_SIZE * scale;
+  for (let py = py0; py <= py1; py++) {
+    for (let px = px0; px <= px1; px++) {
+      const c = pixels[pixelKey(px, py)];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(
+        Math.round(px * ps + offsetX),
+        Math.round(py * ps + offsetY),
+        Math.ceil(ps), Math.ceil(ps)
+      );
+    }
+  }
+}
+
+function drawGrid() {
+  gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+  const ps = PIXEL_SIZE * scale;
+  if (ps < 4) return; // no dibujar grid si muy zoom out
+  gridCtx.strokeStyle = '#000';
+  gridCtx.lineWidth = 0.5;
+  // lineas verticales
+  const startX = ((offsetX % ps) + ps) % ps;
+  for (let x = startX; x <= gridCanvas.width; x += ps) {
+    gridCtx.beginPath();
+    gridCtx.moveTo(x, 0);
+    gridCtx.lineTo(x, gridCanvas.height);
+    gridCtx.stroke();
+  }
+  // lineas horizontales
+  const startY = ((offsetY % ps) + ps) % ps;
+  for (let y = startY; y <= gridCanvas.height; y += ps) {
+    gridCtx.beginPath();
+    gridCtx.moveTo(0, y);
+    gridCtx.lineTo(gridCanvas.width, y);
+    gridCtx.stroke();
+  }
+}
+
+function paintPixel(px, py, c) {
+  if (c === null) {
+    delete pixels[pixelKey(px, py)];
+  } else {
+    pixels[pixelKey(px, py)] = c;
+  }
+  // redibujar solo ese pixel
+  const ps = PIXEL_SIZE * scale;
+  const sx = Math.round(px * ps + offsetX);
+  const sy = Math.round(py * ps + offsetY);
+  ctx.clearRect(sx, sy, Math.ceil(ps) + 1, Math.ceil(ps) + 1);
+  if (c) {
+    ctx.fillStyle = c;
+    ctx.fillRect(sx, sy, Math.ceil(ps), Math.ceil(ps));
+  }
 }
 
 // ── WEBSOCKET ──
 let ws = null, wsReady = false;
+
 function connectWS() {
   try { ws = new WebSocket(WS_URL); } catch { return; }
   ws.onopen = () => {
@@ -295,25 +371,26 @@ function connectWS() {
 
 function handleMsg(msg) {
   if (msg.type === 'init') {
-    for (const [id, segs] of Object.entries(msg.strokes || {}))
-      allStrokes[id] = segs;
+    // cargar pixels del server
+    const data = msg.pixels || {};
+    for (const key in data) pixels[key] = data[key];
     resizeCanvas();
   }
-  if (msg.type === 'draw') {
+  if (msg.type === 'pixel') {
     if (msg.id === myId) return;
-    if (!allStrokes[msg.id]) allStrokes[msg.id] = [];
-    allStrokes[msg.id].push({ x0: msg.x0, y0: msg.y0, x1: msg.x1, y1: msg.y1, color: msg.color, size: msg.size, erase: msg.erase });
-    drawSeg(msg.x0, msg.y0, msg.x1, msg.y1, msg.color, msg.size, msg.erase);
+    paintPixel(msg.px, msg.py, msg.color);
   }
-  if (msg.type === 'clear') {
-    delete allStrokes[msg.id];
+  if (msg.type === 'clear_user') {
+    // el server manda el canvas actualizado sin los pixels del usuario
+    for (const key in pixels) delete pixels[key];
+    for (const key in (msg.pixels || {})) pixels[key] = msg.pixels[key];
     removeCursor(msg.id);
-    redrawAll();
+    redraw();
   }
   if (msg.type === 'clear_all') {
-    for (const id in allStrokes) delete allStrokes[id];
+    for (const key in pixels) delete pixels[key];
     for (const id in remoteCursors) removeCursor(id);
-    redrawAll();
+    redraw();
   }
   if (msg.type === 'cursor') {
     updateCursor(msg.id, msg.id, msg.color, msg.x, msg.y);
@@ -323,22 +400,42 @@ function handleMsg(msg) {
 // ── ZOOM ──
 workspace.addEventListener('wheel', e => {
   e.preventDefault();
-  const factor = e.deltaY > 0 ? 0.9 : 1.1;
-  const newScale = Math.min(Math.max(scale * factor, 0.05), 10);
+  const factor = e.deltaY > 0 ? 0.85 : 1.18;
+  const newScale = Math.min(Math.max(scale * factor, 0.2), 40);
   const rect = workspace.getBoundingClientRect();
   const mx = e.clientX - rect.left, my = e.clientY - rect.top;
   offsetX = mx - (mx - offsetX) * (newScale / scale);
   offsetY = my - (my - offsetY) * (newScale / scale);
   scale = newScale;
-  redrawAll();
+  redraw();
+  drawGrid();
 }, { passive: false });
 
 // ── PAN Y DIBUJO ──
 let isPanning = false, panStartX = 0, panStartY = 0, panOriginX = 0, panOriginY = 0;
-let spaceDown = false, lastCursorSend = 0;
+let spaceDown = false, isMouseDown = false;
+let lastCursorSend = 0;
+let tool = 'pen', color = '#1a1a1a';
 
-window.addEventListener('keydown', e => { if (e.code === 'Space') { spaceDown = true; workspace.style.cursor = 'grab'; e.preventDefault(); } });
-window.addEventListener('keyup',   e => { if (e.code === 'Space') { spaceDown = false; workspace.style.cursor = ''; canvas.style.cursor = 'crosshair'; } });
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { spaceDown = true; workspace.style.cursor = 'grab'; e.preventDefault(); }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space') { spaceDown = false; workspace.style.cursor = 'crosshair'; }
+});
+
+function getPixelFromEvent(e) {
+  const rect = workspace.getBoundingClientRect();
+  const { x, y } = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  return worldToPixel(x, y);
+}
+
+function doPixel(e) {
+  const { px, py } = getPixelFromEvent(e);
+  const c = tool === 'eraser' ? null : color;
+  paintPixel(px, py, c);
+  if (wsReady) ws.send(JSON.stringify({ type: 'pixel', id: myId, px, py, color: c }));
+}
 
 workspace.addEventListener('mousedown', e => {
   if (e.button === 1 || e.button === 2 || spaceDown) {
@@ -349,24 +446,33 @@ workspace.addEventListener('mousedown', e => {
     e.preventDefault(); return;
   }
   if (e.button === 0) {
-    isDrawing = true;
-    const rect = workspace.getBoundingClientRect();
-    const p = toWorld(e.clientX - rect.left, e.clientY - rect.top);
-    lastX = p.x; lastY = p.y;
+    isMouseDown = true;
+    doPixel(e);
   }
 });
 
-window.addEventListener('mousemove', e => {
+workspace.addEventListener('mousemove', e => {
   const rect = workspace.getBoundingClientRect();
   const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
 
   if (isPanning) {
     offsetX = panOriginX + (e.clientX - panStartX);
     offsetY = panOriginY + (e.clientY - panStartY);
-    redrawAll(); return;
+    redraw(); drawGrid(); return;
   }
 
-  // tu propio cursor label
+  // hover pixel highlight
+  const { x, y } = screenToWorld(sx, sy);
+  const { px, py } = worldToPixel(x, y);
+  const ps = PIXEL_SIZE * scale;
+  const hsx = Math.round(px * ps + offsetX);
+  const hsy = Math.round(py * ps + offsetY);
+  hoverEl.style.left   = hsx + 'px';
+  hoverEl.style.top    = hsy + 'px';
+  hoverEl.style.width  = Math.ceil(ps) + 'px';
+  hoverEl.style.height = Math.ceil(ps) + 'px';
+
+  // cursor label propio
   updateCursor('__me__', myId, myColor, sx, sy);
 
   // mandar cursor a los demás
@@ -376,92 +482,37 @@ window.addEventListener('mousemove', e => {
     ws.send(JSON.stringify({ type: 'cursor', id: myId, color: myColor, x: sx, y: sy }));
   }
 
-  if (!isDrawing) return;
-  const { x, y } = toWorld(sx, sy);
-  const erase = tool === 'eraser';
-  const c = erase ? '#ffffff' : color;
-  if (!allStrokes[myId]) allStrokes[myId] = [];
-  allStrokes[myId].push({ x0: lastX, y0: lastY, x1: x, y1: y, color: c, size, erase });
-  drawSeg(lastX, lastY, x, y, c, size, erase);
-  if (wsReady) ws.send(JSON.stringify({ type: 'draw', id: myId, x0: lastX, y0: lastY, x1: x, y1: y, color: c, size, erase }));
-  lastX = x; lastY = y;
+  if (isMouseDown) doPixel(e);
 });
 
 window.addEventListener('mouseup', () => {
-  isDrawing = false; isPanning = false;
-  workspace.style.cursor = spaceDown ? 'grab' : '';
-  canvas.style.cursor = 'crosshair';
+  isMouseDown = false; isPanning = false;
+  workspace.style.cursor = spaceDown ? 'grab' : 'crosshair';
+});
+
+workspace.addEventListener('mouseleave', () => {
+  hoverEl.style.width = '0'; hoverEl.style.height = '0';
+  removeCursor('__me__');
 });
 
 workspace.addEventListener('contextmenu', e => e.preventDefault());
 
-// ── TOUCH ──
-let lastPinchDist = 0, touchDrawing = false;
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  if (e.touches.length === 2) {
-    touchDrawing = false; isPanning = true;
-    panStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-    panStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-    panOriginX = offsetX; panOriginY = offsetY;
-    lastPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-    return;
-  }
-  touchDrawing = true;
-  const rect = workspace.getBoundingClientRect();
-  const p = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
-  lastX = p.x; lastY = p.y;
-}, { passive: false });
-
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  if (e.touches.length === 2 && isPanning) {
-    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-    const rect = workspace.getBoundingClientRect();
-    const newScale = Math.min(Math.max(scale * (dist / lastPinchDist), 0.05), 10);
-    offsetX = (cx - rect.left) - ((cx - rect.left) - offsetX) * (newScale / scale);
-    offsetY = (cy - rect.top)  - ((cy - rect.top)  - offsetY) * (newScale / scale);
-    scale = newScale; lastPinchDist = dist;
-    redrawAll(); return;
-  }
-  if (!touchDrawing) return;
-  const rect = workspace.getBoundingClientRect();
-  const { x, y } = toWorld(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
-  const erase = tool === 'eraser';
-  const c = erase ? '#ffffff' : color;
-  if (!allStrokes[myId]) allStrokes[myId] = [];
-  allStrokes[myId].push({ x0: lastX, y0: lastY, x1: x, y1: y, color: c, size, erase });
-  drawSeg(lastX, lastY, x, y, c, size, erase);
-  if (wsReady) ws.send(JSON.stringify({ type: 'draw', id: myId, x0: lastX, y0: lastY, x1: x, y1: y, color: c, size, erase }));
-  lastX = x; lastY = y;
-}, { passive: false });
-
-canvas.addEventListener('touchend', e => {
-  if (e.touches.length < 2) isPanning = false;
-  if (e.touches.length === 0) touchDrawing = false;
-});
-
 // ── CURSORS ──
-const cursorsEl   = document.getElementById('cursors');
+const cursorsEl = document.getElementById('cursors');
 const remoteCursors = {};
 
 function updateCursor(id, label, col, sx, sy) {
   if (!remoteCursors[id]) {
     const el  = document.createElement('div');
     el.className = 'cursor-label';
-    const tag = document.createElement('div');
-    tag.className = 'name-tag';
-    const dot = document.createElement('div');
-    dot.className = 'cursor-dot';
-    el.appendChild(tag);
-    el.appendChild(dot);
+    const tag = document.createElement('div'); tag.className = 'name-tag';
+    const dot = document.createElement('div'); dot.className = 'cursor-dot';
+    el.appendChild(tag); el.appendChild(dot);
     cursorsEl.appendChild(el);
     remoteCursors[id] = { el, tag, dot };
   }
   const { el, tag, dot } = remoteCursors[id];
-  tag.textContent      = label;
+  tag.textContent = label;
   tag.style.background = col;
   dot.style.background = col;
   el.style.left = sx + 'px';
@@ -476,10 +527,8 @@ function removeCursor(id) {
 document.getElementById('btn-pen').addEventListener('click', () => setTool('pen'));
 document.getElementById('btn-eraser').addEventListener('click', () => setTool('eraser'));
 document.getElementById('btn-clear').addEventListener('click', () => {
-  delete allStrokes[myId]; redrawAll();
   if (wsReady) ws.send(JSON.stringify({ type: 'clear', id: myId }));
 });
-document.getElementById('size-slider').addEventListener('input', e => size = +e.target.value);
 document.querySelectorAll('.color-swatch').forEach(el => {
   el.addEventListener('click', () => {
     document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
@@ -499,15 +548,18 @@ function setTool(t) {
   document.getElementById('btn-eraser').classList.toggle('active', t === 'eraser');
 }
 
-// mostrar modal con el id del usuario
+// ── MODAL ──
 const badge = document.getElementById('id-badge');
 badge.textContent = myId;
 badge.style.background = myColor;
-
 document.getElementById('modal-btn').addEventListener('click', () => {
   document.getElementById('modal').style.display = 'none';
   connectWS();
 });
+
+// ── MOBILE ──
+const isMobile = /Mobi|Android|iPad|iPhone|Tablet/i.test(navigator.userAgent) || window.innerWidth < 768;
+if (isMobile) document.getElementById('mobile-overlay').classList.add('show');
 
 resizeCanvas();
 </script>
