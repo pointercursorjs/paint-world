@@ -197,7 +197,7 @@ header {
 </div>
 
 <script>
-const WS_URL = 'ws://localhost:3001';
+const WS_URL = location.hostname === 'localhost' ? 'ws://localhost:3001' : 'wss://' + location.hostname;
 
 // ── ID RANDOM POR PESTAÑA, LABEL RANDOM TAMBIÉN ──
 const myId    = Math.random().toString(36).slice(2, 8).toUpperCase();
